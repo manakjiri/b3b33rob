@@ -38,7 +38,6 @@ def my_estimatePoseSingleMarkers(corners, marker_size, mtx, distortion):
         trash.append(nada)
     return np.array(rvecs), np.array(tvecs), np.array(trash)
 
-
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument(
@@ -56,6 +55,9 @@ camera.connect(bus.getCameraFromIndex(0))
 # Start capture
 camera.startCapture()
 
+x = 85.0
+y = 85.0
+z = 1.0
 
 while True:
     image = camera.retrieveBuffer()
@@ -84,14 +86,29 @@ while True:
     cv2.aruco.drawDetectedMarkers(gray, corners, ids)
     cv2.aruco.drawDetectedMarkers(frame, corners, ids)
 
-    cv2.imshow("Image with markers", frame)
-    cv2.waitKey(1)
-
     # Estimate SE3 pose of the marker
     camera_matrix = np.array(
         [
-            [240.0, 0, 0],
-            [0, 240, 0],
-            [0, 0, 1],
+            [x, 0, 0],
+            [0, y, 0],
+            [0, 0, z],
         ]
     )
+
+    
+    print(camera_matrix)
+
+    distortion = np.zeros(5)
+    for i in range(len(ids)):
+        rvec, tvec, _ = my_estimatePoseSingleMarkers(
+            corners[i], 0.04, camera_matrix, distortion=distortion
+        )
+        cv2.drawFrameAxes(frame, camera_matrix, distortion, rvec, tvec, 0.04)
+
+
+    cv2.imshow("Image with frames", frame)
+    key = cv2.waitKey(1)
+
+    if key == ord('q'):
+        exit()
+
