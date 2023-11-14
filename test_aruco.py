@@ -36,7 +36,7 @@ def my_estimatePoseSingleMarkers(corners, marker_size, mtx, distortion):
         rvecs.append(R)
         tvecs.append(t)
         trash.append(nada)
-    return rvecs, tvecs, trash
+    return np.array(rvecs), np.array(tvecs), np.array(trash)
 
 
 # construct the argument parser and parse the arguments
@@ -68,17 +68,24 @@ while True:
         (image.getRows(), image.getCols(), 3)
     )
 
+    # RGB to BGR and grayscale
+    frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
+    # adjust
+    gray = cv2.convertScaleAbs(gray, alpha=2, beta=0)
+
+    # detect
     aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_6X6_50)
     detector = cv2.aruco.ArucoDetector(aruco_dict)
 
     # Detect markers and draw them
     (corners, ids, rejected) = detector.detectMarkers(gray)
+    cv2.aruco.drawDetectedMarkers(gray, corners, ids)
     cv2.aruco.drawDetectedMarkers(frame, corners, ids)
 
     cv2.imshow("Image with markers", frame)
-    cv2.waitKey()
+    cv2.waitKey(1)
 
     # Estimate SE3 pose of the marker
     camera_matrix = np.array(
@@ -88,14 +95,3 @@ while True:
             [0, 0, 1],
         ]
     )
-    distortion = np.zeros(5)
-    for i in range(len(ids)):
-        rvec, tvec, _ = cv2.aruco.estimatePoseSingleMarkers(
-            corners[i], 0.04, camera_matrix, distCoeffs=distortion
-        )
-        cv2.drawFrameAxes(frame, camera_matrix, distortion, rvec, tvec, 0.04)
-
-        print(tvec)
-
-    cv2.imshow("Image with frames", frame)
-    cv2.waitKey()
