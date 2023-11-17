@@ -5,7 +5,10 @@ import time
 import cv2
 import sys
 import PyCapture2
+import pickle
 
+x_center = -0.16402563 - 0.025
+y_center = -0.25913066 - 0.025
 
 def my_estimatePoseSingleMarkers(corners, marker_size, mtx, distortion):
     """
@@ -55,9 +58,8 @@ camera.connect(bus.getCameraFromIndex(0))
 # Start capture
 camera.startCapture()
 
-x = 85.0
-y = 85.0
-z = 1.0
+with open('calibration.pickle', 'rb') as f:
+    calibration_dict = pickle.load(f)
 
 while True:
     image = camera.retrieveBuffer()
@@ -68,6 +70,14 @@ while True:
     # Convert image to Numpy array
     frame = np.array(image.getData(), dtype="uint8").reshape(
         (image.getRows(), image.getCols(), 3)
+    )
+
+    frame = cv2.undistort(
+            frame,
+            calibration_dict['K'],
+            calibration_dict['distortion'],
+            None,
+            calibration_dict['Knew']
     )
 
     # RGB to BGR and grayscale
@@ -87,23 +97,19 @@ while True:
     cv2.aruco.drawDetectedMarkers(frame, corners, ids)
 
     # Estimate SE3 pose of the marker
-    camera_matrix = np.array(
-        [
-            [x, 0, 0],
-            [0, y, 0],
-            [0, 0, z],
-        ]
-    )
+    camera_matrix = calibration_dict['K']
 
-    
-    print(camera_matrix)
+    distortion = calibration_dict['distortion']
 
-    distortion = np.zeros(5)
-    for i in range(len(ids)):
-        rvec, tvec, _ = my_estimatePoseSingleMarkers(
-            corners[i], 0.04, camera_matrix, distortion=distortion
-        )
-        cv2.drawFrameAxes(frame, camera_matrix, distortion, rvec, tvec, 0.04)
+    if (ids is not None) and len(ids) != 0:
+        for i in range(len(ids)):
+            rvec, tvec, _ = my_estimatePoseSingleMarkers(
+                corners[i], 0.04, camera_matrix, distortion=distortion
+            )
+            cv2.drawFrameAxes(frame, camera_matrix, distortion, rvec, tvec, 0.04)
+            tvec = tvec - np.array([[[x_center], [y_center], [0]]])
+            print(rvec, 'rvec')
+            print(tvec, 'tvec')
 
 
     cv2.imshow("Image with frames", frame)
