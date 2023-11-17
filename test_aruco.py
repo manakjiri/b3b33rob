@@ -111,6 +111,11 @@ while True:
             print(rvec, 'rvec')
             print(tvec, 'tvec')
 
+            tvec_robot = tvec
+            tvec_robot[0,0,0] = -tvec_robot[0,0,0] + 0.470
+            tvec_robot[0,1,0] = tvec_robot[0,1,0] + 0.415
+            print(tvec_robot)
+
 
     cv2.imshow("Image with frames", frame)
     key = cv2.waitKey(1)
