@@ -44,7 +44,7 @@ with open('calibration.pickle', 'wb') as f:
         'K' : np.array(K),
         'distortion' : distortion,
         'Knew' : np.array(Knew)
-    }, f)
+    }, f, protocol=1)
 
 cv.destroyAllWindows()
 

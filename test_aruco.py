@@ -6,6 +6,9 @@ import cv2
 import sys
 import PyCapture2
 import pickle
+import rospy
+from mitsubishi_arm_student_interface.mitsubishi_robots import Mitsubishi_robot
+
 
 x_center = -0.16402563 - 0.025
 y_center = -0.25913066 - 0.025
@@ -41,6 +44,8 @@ def my_estimatePoseSingleMarkers(corners, marker_size, mtx, distortion):
         trash.append(nada)
     return np.array(rvecs), np.array(tvecs), np.array(trash)
 
+
+
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument(
@@ -57,6 +62,12 @@ camera.connect(bus.getCameraFromIndex(0))
 
 # Start capture
 camera.startCapture()
+
+# Initialize robot interface class
+robot = Mitsubishi_robot()
+
+# Set maximal relative speed (it is recomended to decrease the speed for testing)
+robot.set_max_speed(0.1);
 
 with open('calibration.pickle', 'rb') as f:
     calibration_dict = pickle.load(f)
@@ -88,11 +99,11 @@ while True:
     gray = cv2.convertScaleAbs(gray, alpha=2, beta=0)
 
     # detect
-    aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_6X6_50)
-    detector = cv2.aruco.ArucoDetector(aruco_dict)
+    arucoDict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_6X6_50)
+    arucoParams = cv2.aruco.DetectorParameters_create()
+    (corners, ids, rejected) = cv2.aruco.detectMarkers(gray, arucoDict,
+	parameters=arucoParams)
 
-    # Detect markers and draw them
-    (corners, ids, rejected) = detector.detectMarkers(gray)
     cv2.aruco.drawDetectedMarkers(gray, corners, ids)
     cv2.aruco.drawDetectedMarkers(frame, corners, ids)
 
@@ -103,17 +114,15 @@ while True:
 
     if (ids is not None) and len(ids) != 0:
         for i in range(len(ids)):
-            rvec, tvec, _ = my_estimatePoseSingleMarkers(
-                corners[i], 0.04, camera_matrix, distortion=distortion
+            rvec, tvec = cv2.aruco.estimatePoseSingleMarkers(
+                corners[i], 0.04, camera_matrix, distCoeffs=distortion
             )
-            cv2.drawFrameAxes(frame, camera_matrix, distortion, rvec, tvec, 0.04)
-            tvec = tvec - np.array([[[x_center], [y_center], [0]]])
-            print(rvec, 'rvec')
-            print(tvec, 'tvec')
+            cv2.aruco.drawAxis(frame, camera_matrix, distortion, rvec, tvec, 0.04)
+            tvec = tvec - np.array([[[x_center, y_center, 0]]])
 
             tvec_robot = tvec
             tvec_robot[0,0,0] = -tvec_robot[0,0,0] + 0.470
-            tvec_robot[0,1,0] = tvec_robot[0,1,0] + 0.415
+            tvec_robot[0,0,1] = tvec_robot[0,0,1] + 0.415
             print(tvec_robot)
 
 
@@ -122,4 +131,14 @@ while True:
 
     if key == ord('q'):
         exit()
+    
+    elif key == ord('m') and (tvec_robot is not None):
+        x, y, z, roll, pitch, yaw = robot.get_position()
+
+        wps = [
+            [x, y, z, roll, pitch, yaw],
+            [tvec_robot[0,0], tvec_robot[0,1], z, roll, pitch, yaw],
+        ]
+
+        #robot.execute_cart_trajectory(wps)
 
