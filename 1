@@ -14,26 +14,38 @@ from mitsubishi_arm_student_interface.mitsubishi_robots import Mitsubishi_robot
 x_center = -0.16402563 - 0.025
 y_center = -0.25913066 - 0.025 - 0.005
 
-R_flip  = np.zeros((3,3), dtype=np.float32)
-R_flip[0,0] = 1.0
-R_flip[1,1] =-1.0
-R_flip[2,2] =-1.0
+def my_estimatePoseSingleMarkers(corners, marker_size, mtx, distortion):
+    """
+    This will estimate the rvec and tvec for each of the marker corners detected by:
+       corners, ids, rejectedImgPoints = detector.detectMarkers(image)
+    corners - is an array of detected corners for each detected marker in the image
+    marker_size - is the size of the detected markers
+    mtx - is the camera matrix
+    distortion - is the camera distortion matrix
+    RETURN list of rvecs, tvecs, and trash (so that it corresponds to the old estimatePoseSingleMarkers())
+    """
+    marker_points = np.array(
+        [
+            [-marker_size / 2, marker_size / 2, 0],
+            [marker_size / 2, marker_size / 2, 0],
+            [marker_size / 2, -marker_size / 2, 0],
+            [-marker_size / 2, -marker_size / 2, 0],
+        ],
+        dtype=np.float32,
+    )
+    trash = []
+    rvecs = []
+    tvecs = []
+    for c in corners:
+        nada, R, t = cv2.solvePnP(
+            marker_points, c, mtx, distortion, False, cv2.SOLVEPNP_IPPE_SQUARE
+        )
+        rvecs.append(R)
+        tvecs.append(t)
+        trash.append(nada)
+    return np.array(rvecs), np.array(tvecs), np.array(trash)
 
-def rotationMatrixToEulerAngles(R):
-    sy = math.sqrt(R[0, 0] * R[0, 0] + R[1, 0] * R[1, 0])
 
-    singular = sy < 1e-6
-
-    if not singular:
-        x = math.atan2(R[2, 1], R[2, 2])
-        y = math.atan2(-R[2, 0], sy)
-        z = math.atan2(R[1, 0], R[0, 0])
-    else:
-        x = math.atan2(-R[1, 2], R[1, 1])
-        y = math.atan2(-R[2, 0], sy)
-        z = 0
-
-    return np.array([x, y, z])
 
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
@@ -56,7 +68,7 @@ camera.startCapture()
 robot = Mitsubishi_robot()
 
 # Set maximal relative speed (it is recomended to decrease the speed for testing)
-robot.set_max_speed(0.1);
+robot.set_max_speed(0.25);
 
 with open('calibration.pickle', 'rb') as f:
     calibration_dict = pickle.load(f)
@@ -120,12 +132,9 @@ while True:
             tvec_robot[0] = -tvec_robot[0] + (0.149 + 0.324)
             tvec_robot[1] = tvec_robot[1] + (0.635 - 0.228)
 
-            R_ct    = np.matrix(cv2.Rodrigues(rvec)[0])
-            R_tc    = R_ct.T
-            roll_marker, pitch_marker, cube_rotation = rotationMatrixToEulerAngles(R_flip*R_tc)
+            cube_rotation = np.mod(np.abs(rvec[0,0,1]), np.pi/2)
 
-            print(tvec_robot, rvec, cube_rotation)
-
+            print(tvec_robot, rvec)
 
     cv2.imshow("Image with frames", frame)
     key = cv2.waitKey(1)
@@ -135,42 +144,23 @@ while True:
     
     elif key == ord('m') and (tvec_robot is not None) and (cube_rotation is not None):
         x, y, z, roll, pitch, yaw = robot.get_position()
+
         wps = [
             [x, y, z, roll, pitch, yaw],
             [[tvec_robot[0]], [tvec_robot[1]], z, roll, pitch, yaw],
         ]
         robot.execute_cart_trajectory(wps)
 
+        x, y, z, roll, pitch, yaw = robot.get_position()
         wps = [
-            [[tvec_robot[0]], [tvec_robot[1]], z, roll, pitch, yaw],
-            [[tvec_robot[0]], [tvec_robot[1]], z, roll, pitch, [-cube_rotation]],
+            [x, y, z, roll, pitch, yaw],
+            [[tvec_robot[0]], [tvec_robot[1]], z, roll, pitch, [0]],
         ]
-        try:
-            robot.execute_cart_trajectory(wps)
-        except:
-            pass
+        robot.execute_cart_trajectory(wps)
 
-        wps = [
-            [[tvec_robot[0]], [tvec_robot[1]], z, roll, pitch, [-cube_rotation]],
-            [[tvec_robot[0]], [tvec_robot[1]], [0.130-0.04], roll, pitch, [-cube_rotation]],
-        ]
-        try:
-            robot.execute_cart_trajectory(wps)
-        except:
-            pass
+        #jv = robot.get_joint_values()
+        #jv[5] = -jv[0]
+        #robot.set_joint_values(jv)
 
-        robot.set_gripper('close')
-
-        wps = [
-            [[tvec_robot[0]], [tvec_robot[1]], [0.130-0.04], roll, pitch, [-cube_rotation]],
-            [[0.378], [0.641], [0.130+0.04], roll, pitch, [-cube_rotation]]
-        ]
-
-        try:
-            robot.execute_cart_trajectory(wps)
-        except:
-            pass
-
-        robot.set_gripper('open')
 
 

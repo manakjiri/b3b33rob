@@ -7,7 +7,7 @@ if __name__=='__main__':
     robot = Mitsubishi_robot()
 
     # Set the robot relative maximal speed (decrease for debugging is recommended)
-    robot.set_max_speed(0.04)
+    robot.set_max_speed(0.05)
 
     # get position
     x, y, z, roll, pitch, yaw = robot.get_position()
@@ -16,7 +16,7 @@ if __name__=='__main__':
 
     wps = [
         [x, y, z, roll, pitch, yaw],
-        [[0.3], y+0.4, z, roll, pitch, yaw],
+        [x, y, z, roll, pitch, yaw+0.1],
         [x, y, z, roll, pitch, yaw],
     ]
 

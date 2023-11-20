@@ -3,8 +3,8 @@ import cv2 as cv
 import glob
 import pickle
 
-CHESS_WIDTH = 12
-CHESS_HEIGHT = 8
+CHESS_WIDTH = 10
+CHESS_HEIGHT = 6
 
 # termination criteria
 criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 25, 0.001)
