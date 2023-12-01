@@ -9,10 +9,10 @@ import pickle
 import rospy
 import math
 from mitsubishi_arm_student_interface.mitsubishi_robots import Mitsubishi_robot
+from shapely.geometry import Polygon
 
 hit_box_scale = 1.2
-x_center = -0.16402563 - 0.025
-y_center = -0.25913066 - 0.025 - 0.005
+hit_box_scale_grip = 2.5
 
 R_flip  = np.zeros((3,3), dtype=np.float32)
 R_flip[0,0] = 1.0
@@ -45,9 +45,9 @@ def scaleHitBoxes(corners, scale_vector, angle):
                 rot
             )
     )
-    print(corners-center)
+    #print(corners-center)
     ret = np.array([(np.dot(scale_matrix,((corners-center)[0]).T) + center.T).T], dtype=np.float32)
-    print(ret)
+    #print(ret)
     return ret
 
 # construct the argument parser and parse the arguments
@@ -108,9 +108,9 @@ while True:
     arucoParams = cv2.aruco.DetectorParameters_create()
     (corners, ids, rejected) = cv2.aruco.detectMarkers(gray, arucoDict,
 	parameters=arucoParams)
-    print(corners)
-    print(ids)
-    print('-----------')
+    #print(corners)
+    #print(ids)
+    #print('-----------')
 
     # Estimate SE3 pose of the marker
     camera_matrix = calibration_dict['K']
@@ -127,11 +127,10 @@ while True:
             cv2.aruco.drawAxis(frame, camera_matrix, distortion, rvec, tvec, 0.04)
 
             tvec_robot = np.dot(camera_matrix, tvec.flatten()) / 10 / 1000 / 1.4
-
             #print(tvec)
             #tvec = tvec - np.array([[[x_center, y_center, 0]]])
             #tvec[0,0,0] *= 0.96
-            #tvec[0,0,1] *= 0.912
+            #mtvec[0,0,1] *= 0.912
 
             tvec_robot[0] = -tvec_robot[0] + (0.149 + 0.324)
             tvec_robot[1] = tvec_robot[1] + (0.635 - 0.228)
@@ -140,11 +139,23 @@ while True:
             R_tc    = R_ct.T
             roll_marker, pitch_marker, cube_rotation = rotationMatrixToEulerAngles(R_flip*R_tc)
 
-            corners_centered = scaleHitBoxes(corners[i], np.array([2,1.2]), cube_rotation)
-            print([corners_centered])
-            print(np.array([ids[i]]))
-            cv2.aruco.drawDetectedMarkers(frame, [corners_centered], np.array([ids[i]]))
+            for scale in [np.array([hit_box_scale_grip, hit_box_scale]), np.array([hit_box_scale, hit_box_scale_grip])]:
+                corners_centered = scaleHitBoxes(corners[i], scale, cube_rotation)
+                cv2.aruco.drawDetectedMarkers(frame, [corners_centered], np.array([ids[i]]))
 
+                hit_box = Polygon(corners_centered[0])
+
+                for j in range(len(ids)):
+                    if j == i:
+                        continue
+
+                    other_hit_box = Polygon(corners[j][0])
+                    print(i, 'to', j, hit_box.intersects(other_hit_box))
+                    intersects = hit_box.intersects(other_hit_box)
+
+                    if intersects:
+                        print(corners_centered)
+                        cv2.fillPoly(frame, [corners_centered.astype(np.int32)], color=(0, 0, 255))
 
             #print(tvec_robot, rvec, cube_rotation)
 
@@ -159,13 +170,16 @@ while True:
         x, y, z, roll, pitch, yaw = robot.get_position()
         wps = [
             [x, y, z, roll, pitch, yaw],
-            [[tvec_robot[0]], [tvec_robot[1]], z, roll, pitch, yaw],
+            [[tvec_robot[0]], [tvec_robot[1]], z, [0], pitch, yaw],
         ]
-        robot.execute_cart_trajectory(wps)
+        try:
+            robot.execute_cart_trajectory(wps)
+        except:
+            pass
 
         wps = [
             [[tvec_robot[0]], [tvec_robot[1]], z, roll, pitch, yaw],
-            [[tvec_robot[0]], [tvec_robot[1]], z, roll, pitch, [-cube_rotation]],
+            [[tvec_robot[0]], [tvec_robot[1]], z, [0], pitch, [-np.mod(cube_rotation + np.pi, np.pi/2)]],
         ]
         try:
             robot.execute_cart_trajectory(wps)
@@ -194,5 +208,4 @@ while True:
             pass
 
         robot.set_gripper('open')
-
 
