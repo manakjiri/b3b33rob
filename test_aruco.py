@@ -50,6 +50,20 @@ def scaleHitBoxes(corners, scale_vector, angle):
     #print(ret)
     return ret
 
+
+def robot_move(tvec, height, rot):
+    x, y, z, roll, pitch, yaw = robot.get_position()
+    wps = [
+        [x, y, z, roll, pitch, yaw],
+        [[tvec[0]], [tvec[1]], [height], [0], pitch, [rot]],
+    ]
+    try:
+        print('moving', wps)
+        robot.execute_cart_trajectory(wps)
+        print('done')
+    except:
+        print('failed')
+
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument(
@@ -118,6 +132,8 @@ while True:
     distortion = calibration_dict['distortion']
     tvec_robot = None
     cube_rotation = None
+
+    gripable = []
     
     if (ids is not None) and len(ids) != 0:
         for i in range(len(ids)):
@@ -139,9 +155,14 @@ while True:
             R_tc    = R_ct.T
             roll_marker, pitch_marker, cube_rotation = rotationMatrixToEulerAngles(R_flip*R_tc)
 
-            for scale in [np.array([hit_box_scale_grip, hit_box_scale]), np.array([hit_box_scale, hit_box_scale_grip])]:
+            scales = [np.array([hit_box_scale_grip, hit_box_scale]), np.array([hit_box_scale, hit_box_scale_grip])]
+            for orientation, scale in enumerate(scales):
                 corners_centered = scaleHitBoxes(corners[i], scale, cube_rotation)
                 cv2.aruco.drawDetectedMarkers(frame, [corners_centered], np.array([ids[i]]))
+
+                if len(ids) == 1:
+                    gripable.append((tvec_robot.copy(), cube_rotation, orientation))
+                    break
 
                 hit_box = Polygon(corners_centered[0])
 
@@ -150,15 +171,18 @@ while True:
                         continue
 
                     other_hit_box = Polygon(corners[j][0])
-                    print(i, 'to', j, hit_box.intersects(other_hit_box))
                     intersects = hit_box.intersects(other_hit_box)
 
                     if intersects:
-                        print(corners_centered)
                         cv2.fillPoly(frame, [corners_centered.astype(np.int32)], color=(0, 0, 255))
+                        break
+                else:
+                    gripable.append((tvec_robot.copy(), cube_rotation, orientation))
+
 
             #print(tvec_robot, rvec, cube_rotation)
 
+    #print('gripable', gripable)
 
     cv2.imshow("Image with frames", frame)
     key = cv2.waitKey(1)
@@ -166,46 +190,21 @@ while True:
     if key == ord('q'):
         exit()
     
-    elif key == ord('m') and (tvec_robot is not None) and (cube_rotation is not None):
-        x, y, z, roll, pitch, yaw = robot.get_position()
-        wps = [
-            [x, y, z, roll, pitch, yaw],
-            [[tvec_robot[0]], [tvec_robot[1]], z, [0], pitch, yaw],
-        ]
-        try:
-            robot.execute_cart_trajectory(wps)
-        except:
-            pass
+    elif key == ord('m') and gripable:
+        tvec_robot, cube_rotation, orient = gripable[0]
+        cube_rotation += np.pi/2 * orient
 
-        wps = [
-            [[tvec_robot[0]], [tvec_robot[1]], z, roll, pitch, yaw],
-            [[tvec_robot[0]], [tvec_robot[1]], z, [0], pitch, [-np.mod(cube_rotation + np.pi, np.pi/2)]],
-        ]
-        try:
-            robot.execute_cart_trajectory(wps)
-        except:
-            pass
+        coast_height = 0.150
+        grip_height = coast_height-0.06
+        cube_rotation = np.pi/2 - np.mod(cube_rotation + np.pi/2, np.pi)
 
-        wps = [
-            [[tvec_robot[0]], [tvec_robot[1]], z, roll, pitch, [-cube_rotation]],
-            [[tvec_robot[0]], [tvec_robot[1]], [0.130-0.04], roll, pitch, [-cube_rotation]],
-        ]
-        try:
-            robot.execute_cart_trajectory(wps)
-        except:
-            pass
+        robot_move(tvec_robot, coast_height, cube_rotation)
+        robot_move(tvec_robot, grip_height, cube_rotation)
 
         robot.set_gripper('close')
 
-        wps = [
-            [[tvec_robot[0]], [tvec_robot[1]], [0.130-0.04], roll, pitch, [-cube_rotation]],
-            [[0.378], [0.641], [0.130+0.04], roll, pitch, [-cube_rotation]]
-        ]
-
-        try:
-            robot.execute_cart_trajectory(wps)
-        except:
-            pass
+        robot_move(tvec_robot, coast_height, cube_rotation)
+        robot_move([0.378, 0.641], coast_height, 0)
 
         robot.set_gripper('open')
 
