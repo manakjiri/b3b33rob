@@ -1,4 +1,4 @@
-# import the necessary packages
+# import the necessary packagesnp.matrix(cv2.Rodrigues(rvec)[0])
 import argparse
 import numpy as np
 import time
@@ -10,7 +10,7 @@ import rospy
 import math
 from mitsubishi_arm_student_interface.mitsubishi_robots import Mitsubishi_robot
 
-
+hit_box_scale = 1.2
 x_center = -0.16402563 - 0.025
 y_center = -0.25913066 - 0.025 - 0.005
 
@@ -35,6 +35,21 @@ def rotationMatrixToEulerAngles(R):
 
     return np.array([x, y, z])
 
+def scaleHitBoxes(corners, scale_vector, angle):
+    center = np.mean(corners, axis=1)
+    rot = np.array([[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]], dtype=np.float32)
+    scale_matrix = np.dot(
+            rot.T,
+            np.dot(
+                np.diag(scale_vector),
+                rot
+            )
+    )
+    print(corners-center)
+    ret = np.array([(np.dot(scale_matrix,((corners-center)[0]).T) + center.T).T], dtype=np.float32)
+    print(ret)
+    return ret
+
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument(
@@ -46,6 +61,7 @@ args = vars(ap.parse_args())
 bus = PyCapture2.BusManager()
 camera = PyCapture2.Camera()
 
+print(bus.getNumOfCameras())
 # Select first camera on the bus
 camera.connect(bus.getCameraFromIndex(0))
 
@@ -92,9 +108,9 @@ while True:
     arucoParams = cv2.aruco.DetectorParameters_create()
     (corners, ids, rejected) = cv2.aruco.detectMarkers(gray, arucoDict,
 	parameters=arucoParams)
-
-    cv2.aruco.drawDetectedMarkers(gray, corners, ids)
-    cv2.aruco.drawDetectedMarkers(frame, corners, ids)
+    print(corners)
+    print(ids)
+    print('-----------')
 
     # Estimate SE3 pose of the marker
     camera_matrix = calibration_dict['K']
@@ -124,7 +140,13 @@ while True:
             R_tc    = R_ct.T
             roll_marker, pitch_marker, cube_rotation = rotationMatrixToEulerAngles(R_flip*R_tc)
 
-            print(tvec_robot, rvec, cube_rotation)
+            corners_centered = scaleHitBoxes(corners[i], np.array([2,1.2]), cube_rotation)
+            print([corners_centered])
+            print(np.array([ids[i]]))
+            cv2.aruco.drawDetectedMarkers(frame, [corners_centered], np.array([ids[i]]))
+
+
+            #print(tvec_robot, rvec, cube_rotation)
 
 
     cv2.imshow("Image with frames", frame)
