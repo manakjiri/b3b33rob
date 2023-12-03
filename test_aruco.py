@@ -212,7 +212,7 @@ while True:
         tvec_robot, cube_rotation, orient = gripable[0]
         cube_rotation += np.pi/2 * orient
 
-        coast_height = 0.324
+        coast_height = get_robot_height(tvec_robot[2])
         grip_height = coast_height-0.06
         cube_rotation = np.pi/2 - np.mod(cube_rotation + np.pi/2, np.pi)
 
