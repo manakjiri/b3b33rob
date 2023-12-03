@@ -67,6 +67,14 @@ def robot_move(tvec, height, rot):
     except:
         print('failed')
 
+
+def get_robot_height(camera_height):
+    OFFSET = 0
+    STEP = 0
+    
+    level = int((camera_height - OFFSET)/STEP)
+    return level * STEP + OFFSET
+
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument(
