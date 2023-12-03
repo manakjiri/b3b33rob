@@ -58,7 +58,7 @@ def robot_move(tvec, height, rot):
     x, y, z, roll, pitch, yaw = robot.get_position()
     wps = [
         [x, y, z, roll, pitch, yaw],
-        [[tvec[0]], [tvec[1]], [height], [0], pitch, [rot]],
+        [[tvec[0]], [tvec[1]], [height + 0.027], [0], pitch, [rot]],
     ]
     try:
         print('moving', wps)
@@ -69,11 +69,13 @@ def robot_move(tvec, height, rot):
 
 
 def get_robot_height(camera_height):
-    OFFSET = 0
-    STEP = 0
+    STEP_CAMERA = 0.0485
+    STEP_ROBOT = 0.136-0.086 
+    OFFSET_CAMERA = STEP_CAMERA/2.5
+    OFFSET_ROBOT = STEP_ROBOT/3 + 0.034
     
-    level = int((camera_height - OFFSET)/STEP)
-    return level * STEP + OFFSET
+    level = int((camera_height + OFFSET_CAMERA)/STEP_CAMERA)
+    return level * STEP_ROBOT + OFFSET_ROBOT
 
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
@@ -167,7 +169,7 @@ while True:
 
             tvec_robot[0] = -tvec_robot[0] + (0.075)
             tvec_robot[1] = tvec_robot[1] + (0.550)
-            print(tvec_robot)
+            print(tvec_robot, get_robot_height(tvec_robot[2]))
 
             R_ct    = np.matrix(cv2.Rodrigues(rvec)[0])
             R_tc    = R_ct.T
@@ -213,16 +215,17 @@ while True:
         cube_rotation += np.pi/2 * orient
 
         coast_height = get_robot_height(tvec_robot[2])
-        grip_height = coast_height-0.06
+        print(coast_height)
+        grip_height = coast_height-0.04
         cube_rotation = np.pi/2 - np.mod(cube_rotation + np.pi/2, np.pi)
 
         robot_move(tvec_robot, coast_height, cube_rotation)
-        '''robot_move(tvec_robot, grip_height, cube_rotation)
+        robot_move(tvec_robot, grip_height, cube_rotation)
 
         robot.set_gripper('close')
 
         robot_move(tvec_robot, coast_height, cube_rotation)
         robot_move([0.378, 0.641], coast_height, 0)
 
-        robot.set_gripper('open')'''
+        robot.set_gripper('open')
 
