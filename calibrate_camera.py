@@ -48,3 +48,11 @@ with open('calibration.pickle', 'wb') as f:
 
 cv.destroyAllWindows()
 
+mean_error = 0
+for i in range(len(objpoints)):
+    imgpoints2, _ = cv.projectPoints(objpoints[i], rvecs[i], tvecs[i], K, distortion)
+    error = cv.norm(imgpoints[i], imgpoints2, cv.NORM_L2)/len(imgpoints2)
+    mean_error += error
+
+print( "total error: {}".format(mean_error/len(objpoints)) )
+

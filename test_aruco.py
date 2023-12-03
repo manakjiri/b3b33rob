@@ -10,6 +10,9 @@ import rospy
 import math
 from mitsubishi_arm_student_interface.mitsubishi_robots import Mitsubishi_robot
 from shapely.geometry import Polygon
+import copy
+
+np.set_printoptions(formatter={'float': lambda x: "{0:0.3f}".format(x)})
 
 hit_box_scale = 1.2
 hit_box_scale_grip = 2.5
@@ -142,14 +145,21 @@ while True:
             )
             cv2.aruco.drawAxis(frame, camera_matrix, distortion, rvec, tvec, 0.04)
 
-            tvec_robot = np.dot(camera_matrix, tvec.flatten()) / 10 / 1000 / 1.4
-            #print(tvec)
+            our_matrix = copy.deepcopy(camera_matrix)
+            our_matrix[0,2] = -0.17
+            our_matrix[1,2] = 0.16
+            tvec[0,0,2] *= 1000 * 2.5 * 1.162790968090923
+
+            tvec_robot = np.dot(our_matrix, tvec.flatten()) / 10/ 1000 / 1.4
+            tvec_robot[2] = 1.370 - tvec_robot[2]
+            
             #tvec = tvec - np.array([[[x_center, y_center, 0]]])
             #tvec[0,0,0] *= 0.96
             #mtvec[0,0,1] *= 0.912
 
-            tvec_robot[0] = -tvec_robot[0] + (0.149 + 0.324)
-            tvec_robot[1] = tvec_robot[1] + (0.635 - 0.228)
+            tvec_robot[0] = -tvec_robot[0] + (0.075)
+            tvec_robot[1] = tvec_robot[1] + (0.550)
+            print(tvec_robot)
 
             R_ct    = np.matrix(cv2.Rodrigues(rvec)[0])
             R_tc    = R_ct.T
@@ -194,17 +204,17 @@ while True:
         tvec_robot, cube_rotation, orient = gripable[0]
         cube_rotation += np.pi/2 * orient
 
-        coast_height = 0.150
+        coast_height = 0.324
         grip_height = coast_height-0.06
         cube_rotation = np.pi/2 - np.mod(cube_rotation + np.pi/2, np.pi)
 
         robot_move(tvec_robot, coast_height, cube_rotation)
-        robot_move(tvec_robot, grip_height, cube_rotation)
+        '''robot_move(tvec_robot, grip_height, cube_rotation)
 
         robot.set_gripper('close')
 
         robot_move(tvec_robot, coast_height, cube_rotation)
         robot_move([0.378, 0.641], coast_height, 0)
 
-        robot.set_gripper('open')
+        robot.set_gripper('open')'''
 
