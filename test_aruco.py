@@ -140,13 +140,31 @@ while True:
                 corners[i], 0.04, camera_matrix, distCoeffs=distortion
             )
             cv2.aruco.drawAxis(frame, camera_matrix, distortion, rvec, tvec, 0.04)
+            
+            rvec, tvec = rvec[0,0,:], tvec[0,0,:]
 
             R_ct = np.matrix(cv2.Rodrigues(rvec)[0])
             roll_marker, pitch_marker, cube_rotation = rotationMatrixToEulerAngles(R_flip*R_ct.T)
+            #print(R_ct)
 
-            tvec_robot = np.matrix(tvec[0]).T
-            print(tvec_robot)
-            tvec_robot = -R_ct.T @ tvec_robot
+            if 0 < R_ct[2,1] < 1:
+                # If it gets here, the pose is flipped.
+                # Flip the axes.
+                R_ct *= np.array([
+                        [ 1, -1,  1],
+                        [-1,  1, -1],
+                        [ 1, -1,  1]
+                ])
+                # Fixup: rotate along the plane spanned by camera's forward (Y) axis and vector to marker's position
+                forward = np.array([0, 1, 0])
+                tnorm = tvec / np.linalg.norm(tvec)
+                axis = np.cross(tnorm, forward)
+                angle = -2*math.acos(np.dot(tnorm, forward))
+                R_ct = np.dot(cv2.Rodrigues(angle * axis)[0], R_ct)
+
+            tvec_robot = np.matrix(tvec).T
+            #print(tvec_robot)
+            tvec_robot = -R_ct.T * tvec_robot
             print(tvec_robot)
 
             tvec_robot[0] = -tvec_robot[0] + (0.149 + 0.324)
