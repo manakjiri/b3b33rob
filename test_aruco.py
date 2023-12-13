@@ -24,6 +24,7 @@ R_flip[2,2] =-1.0
 
 TARGET_IDS = [11, 21, 22, 23, 18, 4]
 ARUCO_SIZE = 0.04
+TARGET_RADIUS = ARUCO_SIZE * 3
 
 def rotationMatrixToEulerAngles(R):
     sy = math.sqrt(R[0, 0] * R[0, 0] + R[1, 0] * R[1, 0])
@@ -78,6 +79,7 @@ def get_robot_height(camera_height):
     OFFSET_ROBOT = STEP_ROBOT/3 + 0.034
     
     level = int((camera_height + OFFSET_CAMERA)/STEP_CAMERA)
+    level = max(1, level)
     return level * STEP_ROBOT + OFFSET_ROBOT
 
 def get_coords(corner):
@@ -87,6 +89,8 @@ def get_coords(corner):
     #cv2.aruco.drawAxis(frame, camera_matrix, dist_coeffs, rvec, tvec, ARUCO_SIZE)
 
     our_matrix = copy.deepcopy(camera_matrix)
+    #tvec[0,0,2] = tvec[0,0,2] + 0.15*tvec[0,0,0] + 0.2*tvec[0,0,1]
+
     our_matrix[0,2] = -0.17
     our_matrix[1,2] = 0.16
     tvec[0,0,2] *= 1000 * 2.5 * 1.162790968090923
@@ -97,6 +101,7 @@ def get_coords(corner):
     tvec_robot[0] = -tvec_robot[0] + (0.075)
     tvec_robot[1] = tvec_robot[1] + (0.550)
 
+    print(tvec_robot)
     return tvec_robot, rvec
 
 def calc_max_height(corners):
@@ -199,6 +204,9 @@ while True:
 
             else:
                 if get_robot_height(tvec_robot[2]) != max_height:
+                    continue
+
+                if any([np.linalg.norm(t - tvec_robot) < TARGET_RADIUS for t in target_positions.values()]):
                     continue
 
                 scales = [np.array([hit_box_scale_grip, hit_box_scale]), np.array([hit_box_scale, hit_box_scale_grip])]
