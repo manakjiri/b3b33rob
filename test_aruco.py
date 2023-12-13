@@ -149,6 +149,7 @@ while True:
     gripable = []
     
     if (ids is not None) and len(ids) != 0:
+        max_height = -float('inf')
         for i in range(len(ids)):
             rvec, tvec = cv2.aruco.estimatePoseSingleMarkers(
                 corners[i], 0.04, camera_matrix, distCoeffs=distortion
@@ -169,13 +170,17 @@ while True:
 
             tvec_robot[0] = -tvec_robot[0] + (0.075)
             tvec_robot[1] = tvec_robot[1] + (0.550)
-            print(tvec_robot, get_robot_height(tvec_robot[2]))
+            max_height = max(max_height, get_robot_height(tvec_robot[2]))
 
             R_ct    = np.matrix(cv2.Rodrigues(rvec)[0])
             R_tc    = R_ct.T
             roll_marker, pitch_marker, cube_rotation = rotationMatrixToEulerAngles(R_flip*R_tc)
 
             scales = [np.array([hit_box_scale_grip, hit_box_scale]), np.array([hit_box_scale, hit_box_scale_grip])]
+                
+            if get_robot_height(tvec_robot[2]) != max_height:
+                continue
+
             for orientation, scale in enumerate(scales):
                 corners_centered = scaleHitBoxes(corners[i], scale, cube_rotation)
                 cv2.aruco.drawDetectedMarkers(frame, [corners_centered], np.array([ids[i]]))
@@ -206,12 +211,13 @@ while True:
 
     cv2.imshow("Image with frames", frame)
     key = cv2.waitKey(1)
-
+    
     if key == ord('q'):
         exit()
     
-    elif key == ord('m') and gripable:
+    elif key == ord('m') and gripable and len(gripable):
         tvec_robot, cube_rotation, orient = gripable[0]
+
         cube_rotation += np.pi/2 * orient
 
         coast_height = get_robot_height(tvec_robot[2])
