@@ -22,6 +22,9 @@ R_flip[0,0] = 1.0
 R_flip[1,1] =-1.0
 R_flip[2,2] =-1.0
 
+TARGET_IDS = [11, 21, 22, 23]
+ARUCO_SIZE = 0.04
+
 def rotationMatrixToEulerAngles(R):
     sy = math.sqrt(R[0, 0] * R[0, 0] + R[1, 0] * R[1, 0])
 
@@ -99,7 +102,10 @@ camera.startCapture()
 robot = Mitsubishi_robot()
 
 # Set maximal relative speed (it is recomended to decrease the speed for testing)
-robot.set_max_speed(0.1);
+robot.set_max_speed(0.1)
+
+target_positions = {}
+record_target_positions = False
 
 with open('calibration.pickle', 'rb') as f:
     calibration_dict = pickle.load(f)
@@ -149,11 +155,11 @@ while True:
     gripable = []
     
     if (ids is not None) and len(ids) != 0:
-        for i in range(len(ids)):
+        for i, cube_id in enumerate(ids):
             rvec, tvec = cv2.aruco.estimatePoseSingleMarkers(
-                corners[i], 0.04, camera_matrix, distCoeffs=distortion
+                corners[i], ARUCO_SIZE, camera_matrix, distCoeffs=distortion
             )
-            cv2.aruco.drawAxis(frame, camera_matrix, distortion, rvec, tvec, 0.04)
+            cv2.aruco.drawAxis(frame, camera_matrix, distortion, rvec, tvec, ARUCO_SIZE)
 
             our_matrix = copy.deepcopy(camera_matrix)
             our_matrix[0,2] = -0.17
@@ -171,39 +177,47 @@ while True:
             tvec_robot[1] = tvec_robot[1] + (0.550)
             print(tvec_robot, get_robot_height(tvec_robot[2]))
 
-            R_ct    = np.matrix(cv2.Rodrigues(rvec)[0])
-            R_tc    = R_ct.T
+            R_ct = np.matrix(cv2.Rodrigues(rvec)[0])
+            R_tc = R_ct.T
             roll_marker, pitch_marker, cube_rotation = rotationMatrixToEulerAngles(R_flip*R_tc)
 
-            scales = [np.array([hit_box_scale_grip, hit_box_scale]), np.array([hit_box_scale, hit_box_scale_grip])]
-            for orientation, scale in enumerate(scales):
-                corners_centered = scaleHitBoxes(corners[i], scale, cube_rotation)
-                cv2.aruco.drawDetectedMarkers(frame, [corners_centered], np.array([ids[i]]))
+            if cube_id in TARGET_IDS:
+                cv2.aruco.drawDetectedMarkers(frame, corners[i], np.array([cube_id]))
 
-                if len(ids) == 1:
-                    gripable.append((tvec_robot.copy(), cube_rotation, orientation))
-                    break
+                if record_target_positions:
+                    target_positions[cube_id] = tvec_robot.copy()
+                    print('recorded target', cube_id, 'at', tvec_robot)
 
-                hit_box = Polygon(corners_centered[0])
+            else:
+                scales = [np.array([hit_box_scale_grip, hit_box_scale]), np.array([hit_box_scale, hit_box_scale_grip])]
+                for orientation, scale in enumerate(scales):
+                    corners_centered = scaleHitBoxes(corners[i], scale, cube_rotation)
+                    cv2.aruco.drawDetectedMarkers(frame, [corners_centered], np.array([ids[i]]))
 
-                for j in range(len(ids)):
-                    if j == i:
-                        continue
-
-                    other_hit_box = Polygon(corners[j][0])
-                    intersects = hit_box.intersects(other_hit_box)
-
-                    if intersects:
-                        cv2.fillPoly(frame, [corners_centered.astype(np.int32)], color=(0, 0, 255))
+                    if len(ids) == 1:
+                        gripable.append((tvec_robot.copy(), cube_rotation, orientation))
                         break
-                else:
-                    gripable.append((tvec_robot.copy(), cube_rotation, orientation))
+
+                    hit_box = Polygon(corners_centered[0])
+
+                    for j, other_id in enumerate(ids):
+                        if j == i:
+                            continue
+
+                        other_hit_box = Polygon(corners[j][0])
+                        intersects = hit_box.intersects(other_hit_box)
+
+                        if intersects:
+                            cv2.fillPoly(frame, [corners_centered.astype(np.int32)], color=(0, 0, 255))
+                            break
+                    else:
+                        gripable.append((tvec_robot.copy(), cube_rotation, orientation))
 
 
             #print(tvec_robot, rvec, cube_rotation)
 
     #print('gripable', gripable)
-
+    record_target_positions = False
     cv2.imshow("Image with frames", frame)
     key = cv2.waitKey(1)
 
@@ -213,6 +227,7 @@ while True:
     elif key == ord('m') and gripable:
         tvec_robot, cube_rotation, orient = gripable[0]
         cube_rotation += np.pi/2 * orient
+        drop_height = 0.2
 
         coast_height = get_robot_height(tvec_robot[2])
         print(coast_height)
@@ -225,7 +240,20 @@ while True:
         robot.set_gripper('close')
 
         robot_move(tvec_robot, coast_height, cube_rotation)
-        robot_move([0.378, 0.641], coast_height, 0)
+        
+        if target_positions:
+            pos = target_positions[0]
+            robot_move(pos, coast_height, 0)
+            robot_move(pos, drop_height, 0)
+        else:
+            robot_move([0.378, 0.641], coast_height, 0)
+            robot_move([0.378, 0.641], drop_height, 0)
 
         robot.set_gripper('open')
+
+    elif key == ord('r'):
+        target_positions = {}
+        record_target_positions = True
+
+        robot_move([0.565, 0.510], 0.2, 0)
 
