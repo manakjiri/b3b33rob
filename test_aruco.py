@@ -91,15 +91,15 @@ def get_coords(corner):
     our_matrix = copy.deepcopy(camera_matrix)
     #tvec[0,0,2] = tvec[0,0,2] + 0.15*tvec[0,0,0] + 0.2*tvec[0,0,1]
 
-    our_matrix[0,2] = -0.17
-    our_matrix[1,2] = 0.16
+    our_matrix[0,2] = -0.165
+    our_matrix[1,2] = 0.157
     tvec[0,0,2] *= 1000 * 2.5 * 1.162790968090923
 
     tvec_robot = np.dot(our_matrix, tvec.flatten()) / 10/ 1000 / 1.4
     tvec_robot[2] = 1.370 - tvec_robot[2]
     
-    tvec_robot[0] = -tvec_robot[0] + (0.075)
-    tvec_robot[1] = tvec_robot[1] + (0.550)
+    tvec_robot[0] = -tvec_robot[0] + (0.070)
+    tvec_robot[1] = tvec_robot[1] + (0.545)
 
     print(tvec_robot)
     return tvec_robot, rvec
@@ -276,6 +276,13 @@ while True:
             robot_move([0.378, 0.641], coast_height, 0)
 
         robot.set_gripper('open')
+
+    elif key == ord('t') and gripable and len(gripable):
+        tvec_robot, cube_rotation, orient = gripable[0]
+        cube_rotation += np.pi/2 * orient
+        coast_height = get_robot_height(tvec_robot[2])
+        cube_rotation = np.pi/2 - np.mod(cube_rotation + np.pi/2, np.pi)
+        robot_move(tvec_robot, coast_height, cube_rotation)
 
     elif key == ord('r'):
         target_positions = {}
