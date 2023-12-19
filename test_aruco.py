@@ -22,8 +22,22 @@ R_flip[0,0] = 1.0
 R_flip[1,1] =-1.0
 R_flip[2,2] =-1.0
 
+calib_z1 = 0.088
+calib_x1 = -0.024
+calib_y1 = 0.469
+calib_z2 = 0.045
+calib_x2 = 0.386
+calib_y2 = 0.787
+
+new_calib_x1 = 0.015
+new_calib_y1 = 0.761
+new_calib_z1 = 0.324
+new_calib_x2 = 0 
+new_calib_y2 = 0.756
+new_calib_z2 = 0.011
+
 TARGET_IDS = [11, 21, 22, 23, 18, 4]
-ARUCO_SIZE = 0.04
+ARUCO_SIZE = 0.038
 TARGET_RADIUS = ARUCO_SIZE * 3
 
 def rotationMatrixToEulerAngles(R):
@@ -86,22 +100,21 @@ def get_coords(corner):
     rvec, tvec = cv2.aruco.estimatePoseSingleMarkers(
         corner, ARUCO_SIZE, camera_matrix, distCoeffs=distortion
     )
-    #cv2.aruco.drawAxis(frame, camera_matrix, dist_coeffs, rvec, tvec, ARUCO_SIZE)
 
-    our_matrix = copy.deepcopy(camera_matrix)
-    #tvec[0,0,2] = tvec[0,0,2] + 0.15*tvec[0,0,0] + 0.2*tvec[0,0,1]
+    tvec_robot = np.zeros(3)
+    tvec_robot[0] = -tvec[0,0,0] + 0.157
+    tvec_robot[1] = tvec[0,0,1] + 0.632
+    tvec_robot[2] = -tvec[0,0,2] + (1.61 + 0.013)
 
-    our_matrix[0,2] = -0.165
-    our_matrix[1,2] = 0.157
-    tvec[0,0,2] *= 1000 * 2.5 * 1.162790968090923
+    tvec_robot[2] += ((tvec_robot[0]-calib_x1)/(calib_x2-calib_x1)*0.5 + \
+            (tvec_robot[1]-calib_y1)/(calib_y2-calib_y1)*0.5)*(calib_z1-calib_z2) - calib_z2
 
-    tvec_robot = np.dot(our_matrix, tvec.flatten()) / 10/ 1000 / 1.4
-    tvec_robot[2] = 1.370 - tvec_robot[2]
-    
-    tvec_robot[0] = -tvec_robot[0] + (0.070)
-    tvec_robot[1] = tvec_robot[1] + (0.545)
+    print(tvec_robot, '-before')
+    tvec_robot[0] -= tvec[2]*(new_calib_x2 - new_calib_x1)/(new_calib_z2-new_calib_z1)*0.95
+    tvec_robot[1] -= tvec[2]*(new_calib_y2 - new_calib_y1)/(new_calib_z2-new_calib_z1)*3 
 
-    print(tvec_robot)
+    print(tvec_robot, '-after')
+
     return tvec_robot, rvec
 
 def calc_max_height(corners):
@@ -134,7 +147,7 @@ camera.startCapture()
 robot = Mitsubishi_robot()
 
 # Set maximal relative speed (it is recomended to decrease the speed for testing)
-robot.set_max_speed(0.1)
+robot.set_max_speed(0.3)
 
 target_positions = {}
 record_target_positions = False
@@ -185,13 +198,12 @@ while True:
     cube_rotation = None
 
     gripable = []
-    
+
     if (ids is not None) and len(ids) != 0:
         max_height = calc_max_height(corners)
         for i, cube_id in enumerate(ids):
             cube_id = cube_id[0]
-            tvec_robot, rvec = get_coords(corners[i]) 
-
+            tvec_robot, rvec = get_coords(corners[i])
             R_ct = np.matrix(cv2.Rodrigues(rvec)[0])
             R_tc = R_ct.T
             roll_marker, pitch_marker, cube_rotation = rotationMatrixToEulerAngles(R_flip*R_tc)
