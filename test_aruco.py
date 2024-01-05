@@ -22,12 +22,12 @@ R_flip[0,0] = 1.0
 R_flip[1,1] =-1.0
 R_flip[2,2] =-1.0
 
-calib_z1 = 0.088
-calib_x1 = -0.024
-calib_y1 = 0.469
-calib_z2 = 0.045
-calib_x2 = 0.386
-calib_y2 = 0.787
+calib_z1 = 0.099
+calib_x1 = -0.016
+calib_y1 = 0.492
+calib_z2 = 0.070
+calib_x2 = 0.367
+calib_y2 = 0.759
 
 new_calib_x1 = 0.015
 new_calib_y1 = 0.761
@@ -39,6 +39,8 @@ new_calib_z2 = 0.011
 TARGET_IDS = [11, 21, 22, 23, 18, 4]
 ARUCO_SIZE = 0.038
 TARGET_RADIUS = ARUCO_SIZE * 3
+
+levels = [0.01, 0.07, 0.128, 0.134]
 
 def rotationMatrixToEulerAngles(R):
     sy = math.sqrt(R[0, 0] * R[0, 0] + R[1, 0] * R[1, 0])
@@ -87,7 +89,7 @@ def robot_move(tvec, height, rot):
 
 
 def get_robot_height(camera_height):
-    STEP_CAMERA = 0.0485
+    STEP_CAMERA = 0.05
     STEP_ROBOT = 0.136-0.086 
     OFFSET_CAMERA = STEP_CAMERA/2.5
     OFFSET_ROBOT = STEP_ROBOT/3 + 0.034
@@ -100,7 +102,6 @@ def get_coords(corner):
     rvec, tvec = cv2.aruco.estimatePoseSingleMarkers(
         corner, ARUCO_SIZE, camera_matrix, distCoeffs=distortion
     )
-
     tvec_robot = np.zeros(3)
     tvec_robot[0] = -tvec[0,0,0] + 0.157
     tvec_robot[1] = tvec[0,0,1] + 0.632
@@ -110,8 +111,8 @@ def get_coords(corner):
             (tvec_robot[1]-calib_y1)/(calib_y2-calib_y1)*0.5)*(calib_z1-calib_z2) - calib_z2
 
     print(tvec_robot, '-before')
-    tvec_robot[0] -= tvec[2]*(new_calib_x2 - new_calib_x1)/(new_calib_z2-new_calib_z1)*0.95
-    tvec_robot[1] -= tvec[2]*(new_calib_y2 - new_calib_y1)/(new_calib_z2-new_calib_z1)*3 
+    #tvec_robot[0] -= tvec[0,0,2]*(new_calib_x2 - new_calib_x1)/(new_calib_z2-new_calib_z1)*0.95
+    #tvec_robot[1] -= tvec[0,0,2]*(new_calib_y2 - new_calib_y1)/(new_calib_z2-new_calib_z1)*3 
 
     print(tvec_robot, '-after')
 
@@ -180,6 +181,7 @@ while True:
 
     # adjust
     gray = cv2.convertScaleAbs(gray, alpha=2, beta=0)
+    #frame = gray
 
     # detect
     arucoDict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_6X6_50)
@@ -198,12 +200,14 @@ while True:
     cube_rotation = None
 
     gripable = []
+    z_avg = 0
 
     if (ids is not None) and len(ids) != 0:
         max_height = calc_max_height(corners)
         for i, cube_id in enumerate(ids):
             cube_id = cube_id[0]
             tvec_robot, rvec = get_coords(corners[i])
+            z_avg += tvec_robot[2]
             R_ct = np.matrix(cv2.Rodrigues(rvec)[0])
             R_tc = R_ct.T
             roll_marker, pitch_marker, cube_rotation = rotationMatrixToEulerAngles(R_flip*R_tc)
@@ -256,6 +260,7 @@ while True:
     record_target_positions = False
     cv2.imshow("Image with frames", frame)
     key = cv2.waitKey(1)
+    print(z_avg/4)
     
     if key == ord('q'):
         exit()
