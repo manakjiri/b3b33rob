@@ -37,6 +37,7 @@ new_calib_y2 = 0.756
 new_calib_z2 = 0.011
 
 TARGET_IDS = [11, 21, 22, 23, 18, 4]
+TARGET_MAPPER = {2: 11, 3: 21}
 ARUCO_SIZE = 0.038
 TARGET_RADIUS = ARUCO_SIZE * 3
 
@@ -209,12 +210,14 @@ while True:
             roll_marker, pitch_marker, cube_rotation = rotationMatrixToEulerAngles(R_flip*R_tc)
 
             if cube_id in TARGET_IDS:
+                # target box handling
                 cv2.aruco.drawDetectedMarkers(frame, [corners[i]], np.array([cube_id], dtype=np.int32))
                 if record_target_positions:
                     print('recorded target', cube_id, 'at', tvec_robot)
                     target_positions[cube_id] = tvec_robot.copy()
 
             else:
+                # all other cube handling
                 if get_robot_height(tvec_robot[2]) != max_height:
                     continue
 
@@ -247,10 +250,7 @@ while True:
                             cv2.fillPoly(frame, [corners_centered.astype(np.int32)], color=(0, 0, 255))
                             break
                     else:
-                        gripable.append((tvec_robot.copy(), cube_rotation, orientation))
-
-
-            #print(tvec_robot, rvec, cube_rotation)
+                        gripable.append((tvec_robot.copy(), cube_rotation, orientation, cube_id))
 
     #print('gripable', gripable)
     record_target_positions = False
@@ -261,7 +261,7 @@ while True:
         exit()
     
     elif key == ord('m') and gripable and len(gripable):
-        tvec_robot, cube_rotation, orient = gripable[0]
+        tvec_robot, cube_rotation, orient, cube_id = gripable[0]
 
         cube_rotation += np.pi/2 * orient
         drop_height = 0.2
@@ -279,12 +279,13 @@ while True:
 
         robot_move(tvec_robot, coast_height, cube_rotation)
         
-        if target_positions:
-            pos = target_positions[target_positions.keys()[0]]
+        try:
+            pos = target_positions[TARGET_MAPPER[cube_id]]
             robot_move(pos, coast_height, 0)
             if coast_height > drop_height:
-                 robot_move(pos, drop_height, 0)
-        else:
+                robot_move(pos, drop_height, 0)
+        except IndexError:
+            print(f'No target for cube id={cube_id}')
             robot_move([0.378, 0.641], coast_height, 0)
 
         robot.set_gripper('open')
