@@ -29,18 +29,21 @@ calib_z2 = 0.070
 calib_x2 = 0.367
 calib_y2 = 0.759
 
-height_calib_x = []
-height_calib_y = []
+height_calib_x = [0,-0.014,-0.017,-0.017]
+height_calib_y = [0,0,-0.01,-0.015]
 
-nondistord_x = 0.103
-nondistord_y = 0.587
+height_calib_offset_x = [0,0,-0.002,-0.002]
+height_calib_offset_y = [0,0,-0.002,-0.002]
+
+nondistord_x = 0.043
+nondistord_y = 0.527
 
 TARGET_IDS = [11, 21, 22, 23, 18, 4, 20]
 TARGET_MAPPER = {2: 20, 3: 21}
 ARUCO_SIZE = 0.038
 TARGET_RADIUS = ARUCO_SIZE * 3
 
-LEVELS = [0, 0.03, 0.088, 0.138, 0.154]
+LEVELS = [0, 0.0524, 0.088, 0.14, 204]
 
 def rotationMatrixToEulerAngles(R):
     sy = math.sqrt(R[0, 0] * R[0, 0] + R[1, 0] * R[1, 0])
@@ -88,11 +91,9 @@ def robot_move(tvec, height, rot):
         print('failed')
 
 
-def get_robot_height(camera_height):
+def get_camera_level(camera_height):
     #STEP_CAMERA = 0.05
-    STEP_ROBOT = 0.136-0.086 
     #OFFSET_CAMERA = STEP_CAMERA/2.5
-    OFFSET_ROBOT = STEP_ROBOT/3 + 0.034
     
     #level = int((camera_height + OFFSET_CAMERA)/STEP_CAMERA)
     level_camera = 1
@@ -101,8 +102,14 @@ def get_robot_height(camera_height):
             level_camera = i+1
             break
 
+    return level_camera
+def get_robot_height(camera_height):
+    STEP_ROBOT = 0.136-0.086 
+    OFFSET_ROBOT = STEP_ROBOT/3 + 0.034
+    level_camera = get_camera_level(camera_height)
     level = max(1, level_camera)
     return level * STEP_ROBOT + OFFSET_ROBOT
+
 
 def get_coords(corner):
     rvec, tvec = cv2.aruco.estimatePoseSingleMarkers(
@@ -116,11 +123,9 @@ def get_coords(corner):
     tvec_robot[2] += ((tvec_robot[0]-calib_x1)/(calib_x2-calib_x1)*0.5 + \
             (tvec_robot[1]-calib_y1)/(calib_y2-calib_y1)*0.5)*(calib_z1-calib_z2) - calib_z2
 
-    print(tvec_robot, '-before')
-
-        
-
-    print(tvec_robot, '-after')
+    camera_level = get_camera_level(tvec_robot[2])
+    tvec_robot[0] += (tvec_robot[0]-nondistord_x)*height_calib_x[camera_level-1] + height_calib_offset_x[camera_level-1]
+    tvec_robot[1] += (tvec_robot[1]-nondistord_y)*height_calib_y[camera_level-1] + height_calib_offset_y[camera_level-1]
 
     return tvec_robot, rvec
 
@@ -206,14 +211,11 @@ while True:
     cube_rotation = None
 
     gripable = []
-    z_avg = 0
-
     if (ids is not None) and len(ids) != 0:
         max_height = calc_max_height(corners)
         for i, cube_id in enumerate(ids):
             cube_id = cube_id[0]
             tvec_robot, rvec = get_coords(corners[i])
-            z_avg += tvec_robot[2]
             R_ct = np.matrix(cv2.Rodrigues(rvec)[0])
             R_tc = R_ct.T
             roll_marker, pitch_marker, cube_rotation = rotationMatrixToEulerAngles(R_flip*R_tc)
@@ -228,17 +230,18 @@ while True:
             else:
                 # all other cube handling
                 cube_height = get_robot_height(tvec_robot[2])
-                if cube_height != max_height:
+
+                if any([np.linalg.norm(t[:2] - tvec_robot[:2]) < TARGET_RADIUS for t in target_positions.values()]):
                     continue
 
-                if any([np.linalg.norm(t - tvec_robot) < TARGET_RADIUS for t in target_positions.values()]):
+                if cube_height != max_height:
                     continue
 
                 cv2.putText(
                     frame, 
-                    'L' + str(cube_height),
-                    (corners[i,0,0,0] + ARUCO_SIZE/1.5, corners[i,0,0,1]),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2
+                    'L' + str(get_camera_level(tvec_robot[2])),
+                    (int(corners[i][0,0,0] + ARUCO_SIZE/1.5), int(corners[i][0,0,1])),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255)
                 )
 
                 scales = [np.array([hit_box_scale_grip, hit_box_scale]), np.array([hit_box_scale, hit_box_scale_grip])]
@@ -273,7 +276,6 @@ while True:
     record_target_positions = False
     cv2.imshow("Image with frames", frame)
     key = cv2.waitKey(1)
-    print(z_avg/4)
     
     if key == ord('q'):
         exit()
@@ -291,7 +293,9 @@ while True:
         cube_rotation = np.pi/2 - np.mod(cube_rotation + np.pi/2, np.pi)
 
         robot_move(tvec_robot, coast_height, cube_rotation)
+        robot.set_max_speed(0.03)
         robot_move(tvec_robot, grip_height, cube_rotation)
+        robot.set_max_speed(0.1)
 
         robot.set_gripper('close')
 
@@ -319,6 +323,6 @@ while True:
         target_positions = {}
         record_target_positions = True
 
-        robot_move([0.565, 0.510], 0.2, 0)
+        robot_move([0.565, 0.510], 0.3, 0)
         robot.set_gripper('open')
 
