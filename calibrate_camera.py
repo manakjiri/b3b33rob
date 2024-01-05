@@ -3,7 +3,7 @@ import cv2 as cv
 import glob
 import pickle
 
-CHESS_WIDTH = 10
+CHESS_WIDTH = 9
 CHESS_HEIGHT = 6
 
 # termination criteria
