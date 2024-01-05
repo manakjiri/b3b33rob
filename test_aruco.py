@@ -227,11 +227,19 @@ while True:
 
             else:
                 # all other cube handling
-                if get_robot_height(tvec_robot[2]) != max_height:
+                cube_height = get_robot_height(tvec_robot[2])
+                if cube_height != max_height:
                     continue
 
                 if any([np.linalg.norm(t - tvec_robot) < TARGET_RADIUS for t in target_positions.values()]):
                     continue
+
+                cv2.putText(
+                    frame, 
+                    'L' + str(cube_height),
+                    (corners[i,0,0,0] + ARUCO_SIZE/1.5, corners[i,0,0,1]),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2
+                )
 
                 scales = [np.array([hit_box_scale_grip, hit_box_scale]), np.array([hit_box_scale, hit_box_scale_grip])]
                 for orientation, scale in enumerate(scales):
