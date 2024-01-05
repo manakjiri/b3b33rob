@@ -22,26 +22,25 @@ R_flip[0,0] = 1.0
 R_flip[1,1] =-1.0
 R_flip[2,2] =-1.0
 
-calib_z1 = 0.099
+calib_z1 = 0.089
 calib_x1 = -0.016
 calib_y1 = 0.492
 calib_z2 = 0.070
 calib_x2 = 0.367
 calib_y2 = 0.759
 
-new_calib_x1 = 0.015
-new_calib_y1 = 0.761
-new_calib_z1 = 0.324
-new_calib_x2 = 0 
-new_calib_y2 = 0.756
-new_calib_z2 = 0.011
+height_calib_x = []
+height_calib_y = []
 
-TARGET_IDS = [11, 21, 22, 23, 18, 4]
-TARGET_MAPPER = {2: 11, 3: 21}
+nondistord_x = 0.103
+nondistord_y = 0.587
+
+TARGET_IDS = [11, 21, 22, 23, 18, 4, 20]
+TARGET_MAPPER = {2: 20, 3: 21}
 ARUCO_SIZE = 0.038
 TARGET_RADIUS = ARUCO_SIZE * 3
 
-levels = [0.01, 0.07, 0.128, 0.134]
+LEVELS = [0, 0.03, 0.088, 0.138, 0.154]
 
 def rotationMatrixToEulerAngles(R):
     sy = math.sqrt(R[0, 0] * R[0, 0] + R[1, 0] * R[1, 0])
@@ -90,13 +89,19 @@ def robot_move(tvec, height, rot):
 
 
 def get_robot_height(camera_height):
-    STEP_CAMERA = 0.05
+    #STEP_CAMERA = 0.05
     STEP_ROBOT = 0.136-0.086 
-    OFFSET_CAMERA = STEP_CAMERA/2.5
+    #OFFSET_CAMERA = STEP_CAMERA/2.5
     OFFSET_ROBOT = STEP_ROBOT/3 + 0.034
     
-    level = int((camera_height + OFFSET_CAMERA)/STEP_CAMERA)
-    level = max(1, level)
+    #level = int((camera_height + OFFSET_CAMERA)/STEP_CAMERA)
+    level_camera = 1
+    for i in range(4):
+        if LEVELS[i] < camera_height < LEVELS[i+1]:
+            level_camera = i+1
+            break
+
+    level = max(1, level_camera)
     return level * STEP_ROBOT + OFFSET_ROBOT
 
 def get_coords(corner):
@@ -112,8 +117,8 @@ def get_coords(corner):
             (tvec_robot[1]-calib_y1)/(calib_y2-calib_y1)*0.5)*(calib_z1-calib_z2) - calib_z2
 
     print(tvec_robot, '-before')
-    #tvec_robot[0] -= tvec[0,0,2]*(new_calib_x2 - new_calib_x1)/(new_calib_z2-new_calib_z1)*0.95
-    #tvec_robot[1] -= tvec[0,0,2]*(new_calib_y2 - new_calib_y1)/(new_calib_z2-new_calib_z1)*3 
+
+        
 
     print(tvec_robot, '-after')
 
@@ -149,7 +154,7 @@ camera.startCapture()
 robot = Mitsubishi_robot()
 
 # Set maximal relative speed (it is recomended to decrease the speed for testing)
-robot.set_max_speed(0.3)
+robot.set_max_speed(0.1)
 
 target_positions = {}
 record_target_positions = False
@@ -234,7 +239,7 @@ while True:
                     cv2.aruco.drawDetectedMarkers(frame, [corners_centered], np.array([ids[i]]))
 
                     if len(ids) == 1:
-                        gripable.append((tvec_robot.copy(), cube_rotation, orientation))
+                        gripable.append((tvec_robot.copy(), cube_rotation, orientation, cube_id))
                         break
 
                     hit_box = Polygon(corners_centered[0])
@@ -289,14 +294,14 @@ while True:
             robot_move(pos, coast_height, 0)
             if coast_height > drop_height:
                 robot_move(pos, drop_height, 0)
-        except IndexError:
-            print(f'No target for cube id={cube_id}')
+        except KeyError:
+            print('No target for cube id ' + str(cube_id))
             robot_move([0.378, 0.641], coast_height, 0)
 
         robot.set_gripper('open')
 
     elif key == ord('t') and gripable and len(gripable):
-        tvec_robot, cube_rotation, orient = gripable[0]
+        tvec_robot, cube_rotation, orient, _ = gripable[0]
         cube_rotation += np.pi/2 * orient
         coast_height = get_robot_height(tvec_robot[2])
         cube_rotation = np.pi/2 - np.mod(cube_rotation + np.pi/2, np.pi)
