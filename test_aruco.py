@@ -30,7 +30,8 @@ calib_x2 = 0.367
 calib_y2 = 0.759
 
 height_calib_x = [0,-0.014,-0.017,-0.017]
-height_calib_y = [0,0,-0.01,-0.015]
+#height_calib_y = [0,0,-0.01,-0.015]
+height_calib_y = [0,0,-0.01,-0.014]
 
 height_calib_offset_x = [0,0,-0.002,-0.002]
 height_calib_offset_y = [0,0,-0.002,-0.002]
